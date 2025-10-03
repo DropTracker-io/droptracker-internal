@@ -1,0 +1,11 @@
+.env
+venv/*
+alembic/*
+games/*
+**__pycache__**
+static/assets/img/itemdb/*
+static/assets/img/npcdb/*
+static/assets/img/user-upload/*
+static/assets/clans/*/lb/*
+*.doctree
+lootboard/themes/*
