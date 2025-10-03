@@ -16,12 +16,28 @@ from services.points import award_points_to_player
 from utils.format import convert_to_ms, get_true_boss_name
 from services.ticket_system import Tickets
 from sqlalchemy.exc import OperationalError, DisconnectionError
-from monitor.sdnotifier import SystemdWatchdog
+from dotenv import load_dotenv
+load_dotenv()
+
+# Provide a no-op watchdog in dev to avoid systemd usage on Windows
+class _DummyWatchdog:
+    def set_health_check(self, fn):
+        return None
+    async def __aenter__(self):
+        return self
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+    async def notify_ready(self):
+        return None
+
+if os.getenv("STATUS") == "dev":
+    SystemdWatchdog = _DummyWatchdog  # type: ignore
+else:
+    from monitor.sdnotifier import SystemdWatchdog
 import time
 
 target_guilds = os.getenv("TARGET_GUILDS").split(",")
 
-load_dotenv()
 if os.getenv("STATUS") == "dev":
     bot_token = os.getenv("DEV_WEBHOOK_TOKEN")
 else:

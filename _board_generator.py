@@ -1,7 +1,26 @@
 import asyncio
 import signal
 import sys
-from monitor.sdnotifier import SystemdWatchdog
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Provide a no-op watchdog in dev to avoid systemd usage on Windows
+class _DummyWatchdog:
+    def set_health_check(self, fn):
+        return None
+    async def __aenter__(self):
+        return self
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+    async def notify_ready(self):
+        return None
+
+if os.getenv("STATUS") == "dev":
+    SystemdWatchdog = _DummyWatchdog  # type: ignore
+else:
+    from monitor.sdnotifier import SystemdWatchdog
 
 # Global variables for systemd watchdog
 watchdog = None
