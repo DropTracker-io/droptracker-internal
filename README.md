@@ -55,6 +55,8 @@ DropTracker.io powers OSRS loot, achievements, and leaderboards across Discord c
 - MySQL storage via SQLAlchemy, with Alembic migrations.
 - Optional Redis-backed caches and utilities for Cloudflare, GitHub, WOM, and more.
 
+It is important to note that this repository is very much a work-in-progress, and many pieces of code may be outdated or completely deprecated, but not yet removed.
+
 ### Built With
 
 - Python 3.10+
