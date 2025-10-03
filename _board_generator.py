@@ -44,9 +44,13 @@ def signal_handler(signum, frame):
 
 def setup_signal_handlers():
     """Setup signal handlers for graceful shutdown"""
-    signal.signal(signal.SIGTERM, signal_handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGHUP, signal_handler)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, signal_handler)
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, signal_handler)
 
 async def board_loop():
     while not shutdown_event.is_set():

@@ -229,9 +229,14 @@ def setup_signal_handlers():
     Registers handlers for SIGTERM, SIGINT, and SIGHUP signals
     to ensure the application can shut down gracefully when requested.
     """
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Cross-platform signal setup
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGHUP, signal_handler)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, signal_handler)
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, signal_handler)
 
 @listen(Startup)
 async def on_startup(event: Startup):
