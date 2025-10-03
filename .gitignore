@@ -9,3 +9,4 @@ static/assets/img/user-upload/*
 static/assets/clans/*/lb/*
 *.doctree
 lootboard/themes/*
+alembic.ini
