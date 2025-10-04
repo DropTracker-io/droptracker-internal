@@ -1,12 +1,12 @@
 [
     {
-        "drop_id": 5,
-        "item_id": 29799,
-        "npc_id": 13668,
-        "value": 47036296,
+        "drop_id": 420,
+        "item_id": 29004,
+        "npc_id": 13740,
+        "value": 1315923,
         "quantity": 1,
-        "total_value": 47036296,
-        "date_added": "2025-09-28 14:44:21",
-        "partition": 202509
+        "total_value": 1315923,
+        "date_added": "2025-10-03 13:54:01",
+        "partition": 202510
     }
 ]

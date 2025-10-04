@@ -1,26 +1,15 @@
 import asyncio
 import signal
 import sys
-import os
-from dotenv import load_dotenv
+from monitor.sdnotifier import SystemdWatchdog
 
-load_dotenv()
+"""
+Lootboard Generator
 
-# Provide a no-op watchdog in dev to avoid systemd usage on Windows
-class _DummyWatchdog:
-    def set_health_check(self, fn):
-        return None
-    async def __aenter__(self):
-        return self
-    async def __aexit__(self, exc_type, exc, tb):
-        return None
-    async def notify_ready(self):
-        return None
+This process runs as a systemd service to call the actual `board_generator.py` script every 2 minutes.
+"""
 
-if os.getenv("STATUS") == "dev":
-    SystemdWatchdog = _DummyWatchdog  # type: ignore
-else:
-    from monitor.sdnotifier import SystemdWatchdog
+
 
 # Global variables for systemd watchdog
 watchdog = None
@@ -44,13 +33,9 @@ def signal_handler(signum, frame):
 
 def setup_signal_handlers():
     """Setup signal handlers for graceful shutdown"""
-    if hasattr(signal, "SIGTERM"):
-        signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    if hasattr(signal, "SIGHUP"):
-        signal.signal(signal.SIGHUP, signal_handler)
-    if hasattr(signal, "SIGBREAK"):
-        signal.signal(signal.SIGBREAK, signal_handler)
+    signal.signal(signal.SIGHUP, signal_handler)
 
 async def board_loop():
     while not shutdown_event.is_set():
@@ -58,10 +43,11 @@ async def board_loop():
             print("Starting board generation process...")
             # Use asyncio subprocess to avoid blocking the watchdog
             process = await asyncio.create_subprocess_exec(
-                "/store/droptracker/disc/venv/bin/python", "-u", "-m", "lootboard.lootboards",
-                stdout=asyncio.subprocess.PIPE,
+                "/store/droptracker/disc/venv/bin/python", ## Venv location
+                "-m", "lootboard.board_generator", ## File to execute in subprocess
+                stdout=asyncio.subprocess.PIPE, 
                 stderr=asyncio.subprocess.PIPE,
-                cwd="/store/droptracker/disc"
+                cwd="/store/droptracker/disc"  ## Working directory
             )
             
             # Wait for process with timeout, but don't block watchdog

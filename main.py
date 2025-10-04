@@ -155,7 +155,7 @@ bot = interactions.Client(intents=Intents.DIRECT_MESSAGES | Intents.GUILD_INTEGR
 bot.send_not_ready_messages = True
 bot.send_command_tracebacks = False
 
-if os.getenv("STATUS") == "dev":
+if os.getenv("STATE") == "dev" or os.getenv("STATUS") == "dev":
     bot_token = os.getenv("DEV_TOKEN")
 else:
     bot_token = os.getenv("BOT_TOKEN")
@@ -179,6 +179,7 @@ app.config['PROXY_FIX_X_PREFIX'] = 1
 notification_service = None
 watchdog = None
 shutdown_event = asyncio.Event()
+startup_initialized = False
 
 # Health check functions for systemd watchdog
 async def health_check():
@@ -245,23 +246,27 @@ async def on_startup(event: Startup):
     start_time = time.time()
     global total_guilds
     global notification_service
-    notification_service = NotificationService(bot, db)
+    global startup_initialized
+    if not notification_service:
+        notification_service = NotificationService(bot, db)
     print(f"Connected as {bot.user.display_name} with id {bot.user.id}")
     bot_ready.value = True
     bot.send_command_tracebacks = False
     app_logger = AppLogger()
     await bot.change_presence(status=interactions.Status.ONLINE,
                               activity=interactions.Activity(name=f" /help", type=interactions.ActivityType.WATCHING))
-    #bot.load_extension("services.update_dmer")
-    bot.load_extension("commands")
-    bot.load_extension("services.bot_state")
-    bot.load_extension("services.message_handler")
-    bot.load_extension("services.channel_names")
-    bot.load_extension("services.components")
-    print("Loaded services.")
-    print("Set bot to ready")
-    await asyncio.sleep(1)
-    await create_tasks()
+    if not startup_initialized:
+        #bot.load_extension("services.update_dmer")
+        bot.load_extension("commands")
+        bot.load_extension("services.bot_state")
+        bot.load_extension("services.message_handler")
+        bot.load_extension("services.channel_names")
+        bot.load_extension("services.components")
+        print("Loaded services.")
+        print("Set bot to ready")
+        await asyncio.sleep(1)
+        await create_tasks()
+        startup_initialized = True
 
 
 ## Quart server functions ##
@@ -540,11 +545,7 @@ async def heartbeat_check():
     global bot
     
     if not bot.is_ready:
-        app_logger.log(log_type="warning", data="Bot is not ready, attempting to reconnect", app_name="main", description="heartbeat_check")
-        try:
-            await bot.astart(bot_token)
-        except Exception as e:
-            app_logger.log(log_type="error", data=f"Failed to reconnect bot: {e}", app_name="main", description="heartbeat_check")
+        app_logger.log(log_type="warning", data="Bot is not ready; waiting for run_bot to handle reconnect", app_name="main", description="heartbeat_check")
 
 async def run_discord_bot():
     async with aiohttp.ClientSession() as session:
@@ -576,69 +577,22 @@ async def main():
             await watchdog.notify_ready()
             print("Systemd watchdog initialized and ready notification sent")
             
-            while not shutdown_event.is_set():  # Check for shutdown signal
-                bot_task = asyncio.create_task(run_bot())
-                hypercorn_config = create_hypercorn_config()
-                quart_task = asyncio.create_task(hypercorn.asyncio.serve(app, hypercorn_config))
-                
-                try:
-                    # Wait for either tasks to complete or shutdown signal
-                    done, pending = await asyncio.wait(
-                        [bot_task, quart_task, asyncio.create_task(shutdown_event.wait())],
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
-                    
-                    # If shutdown was requested, cancel all tasks
-                    if shutdown_event.is_set():
-                        print("Shutdown requested, cancelling tasks...")
-                        for task in [bot_task, quart_task]:
-                            if not task.done():
-                                task.cancel()
-                                try:
-                                    await task
-                                except asyncio.CancelledError:
-                                    pass
-                        break
-                    
-                    # Check if any task failed
-                    for task in done:
-                        if task.exception():
-                            print(f"Task failed: {task.exception()}")
-                            # Cancel remaining tasks
-                            for remaining_task in [bot_task, quart_task]:
-                                if not remaining_task.done():
-                                    remaining_task.cancel()
-                                    try:
-                                        await remaining_task
-                                    except asyncio.CancelledError:
-                                        pass
-                            
-                            # Wait before attempting restart (unless shutdown requested)
-                            if not shutdown_event.is_set():
-                                await asyncio.sleep(5)
-                                print("Restarting tasks...")
-                                continue
-                            else:
-                                break
-                
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                    # Properly clean up tasks
-                    for task in [bot_task, quart_task]:
-                        if not task.done():
-                            task.cancel()
-                            try:
-                                await task
-                            except asyncio.CancelledError:
-                                pass
-                    
-                    # Wait before attempting restart (unless shutdown requested)
-                    if not shutdown_event.is_set():
-                        await asyncio.sleep(5)
-                        print("Restarting tasks...")
-                        continue
-                    else:
-                        break
+            # Start bot and web server concurrently, and keep serving until shutdown
+            bot_task = asyncio.create_task(run_bot())
+            hypercorn_config = create_hypercorn_config()
+            quart_task = asyncio.create_task(hypercorn.asyncio.serve(app, hypercorn_config))
+
+            try:
+                await shutdown_event.wait()
+            finally:
+                print("Shutdown requested, cancelling tasks...")
+                for task in [bot_task, quart_task]:
+                    if not task.done():
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
             
             print("Application shutting down gracefully...")
             
