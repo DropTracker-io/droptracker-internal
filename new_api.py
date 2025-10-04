@@ -1158,7 +1158,7 @@ async def webhook_data():
                 
                 # Extract data from Discord webhook format
                 processed_items = await process_webhook_data(webhook_data)
-                logger.log("info", f"Processed webhook data: {processed_items}")
+                logger.log_sync("info", f"Processed webhook data: {processed_items}")
                 if not processed_items:
                     return jsonify({"error": "Could not process webhook data"}), 400
                 
@@ -1216,21 +1216,21 @@ async def webhook_data():
                             case "drop" | "other"| "npc":
                                 submission_type = "drop"
                                 response = await submissions.drop_processor(processed_data, external_session=db_session)
-                                logger.log("info", f"drop_processor response: {response}")
+                                logger.log_sync("info", f"drop_processor response: {response}")
                             case "collection_log":
                                 submission_type = "collection_log"
                                 print(f"Processed data: {processed_data}")
                                 await submissions.clog_processor(processed_data, external_session=db_session)
-                                logger.log("info", f"clog_processor response: {response}")
+                                logger.log_sync("info", f"clog_processor response: {response}")
                             case "personal_best" | "kill_time" | "npc_kill":
                                 submission_type = "personal_best"
                                 #print("Got pb processed data: ", processed_data)
                                 await submissions.pb_processor(processed_data, external_session=db_session)
-                                logger.log("info", f"pb_processor response: {response}")
+                                logger.log_sync("info", f"pb_processor response: {response}")
                             case "combat_achievement":
                                 submission_type = "combat_achievement"
                                 await submissions.ca_processor(processed_data, external_session=db_session)
-                                logger.log("info", f"ca_processor response: {response}")
+                                logger.log_sync("info", f"ca_processor response: {response}")
                             case "experience_update" | "experience_milestone" | "level_up":
                                 #submission_type = "experience"
                                 #await submissions.experience_processor(processed_data, external_session=db_session)
@@ -1241,11 +1241,11 @@ async def webhook_data():
                                 continue
                             case "pet":
                                 await submissions.pet_processor(processed_data, external_session=db_session)
-                                logger.log("info", f"pet_processor response: {response}")
+                                logger.log_sync("info", f"pet_processor response: {response}")
                                 continue
                             case "adventure_log":
                                 await submissions.adventure_log_processor(processed_data, external_session=db_session)
-                                logger.log("info", f"adventure_log_processor response: {response}")
+                                logger.log_sync("info", f"adventure_log_processor response: {response}")
                                 continue
                             case _:
                                 #print(f"Unknown submission type: {submission_type} data: {processed_data}")
@@ -1256,7 +1256,7 @@ async def webhook_data():
                     success = True
                     
                 except Exception as processor_error:
-                    logger.log("error", f"Processor error: {processor_error}")
+                    logger.log_sync("error", f"Processor error: {processor_error}")
                     print(f"Processor error: {processor_error}")
                     # Roll back on error
                     if db_session:
@@ -1269,7 +1269,7 @@ async def webhook_data():
                 
             except Exception as e:
                 print(f"Error processing multipart request: {e}")
-                logger.log("error", f"Error processing multipart request: {e}")
+                logger.log_sync("error", f"Error processing multipart request: {e}")
                 return jsonify({"error": f"Error processing request: {str(e)}"}), 400
         else:
             # Handle non-multipart requests (e.g., JSON)
@@ -1279,11 +1279,11 @@ async def webhook_data():
                 return jsonify({"message": "JSON data processed"}), 200
             except Exception as e:
                 print(f"Error processing JSON request: {e}")
-                logger.log("error", f"Error processing JSON request: {e}")
+                logger.log_sync("error", f"Error processing JSON request: {e}")
                 return jsonify({"error": f"Error processing request: {str(e)}"}), 400
     except Exception as e:
         print("Webhook Exception: ", e)
-        logger.log("error", f"Webhook Exception: {e}")
+        logger.log_sync("error", f"Webhook Exception: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         # Always close the session if it was created
