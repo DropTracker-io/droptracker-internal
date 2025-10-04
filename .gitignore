@@ -10,4 +10,5 @@ static/assets/clans/*/lb/*
 *.doctree
 lootboard/themes/*
 alembic.ini
-data/logs/app_logs.json
+app_logs.json
+.cursor/*
