@@ -69,15 +69,19 @@ class SystemdWatchdog:
             try:
                 # Run health check if provided
                 if self.health_check_func:
-                    if asyncio.iscoroutinefunction(self.health_check_func):
+                    try:
                         healthy = await self.health_check_func()
-                    else:
-                        healthy = self.health_check_func()
+                    except Exception as e:
+                        logger.error(f"Error in health check: {e}")
+                        healthy = False
                     
                     if not healthy:
                         logger.warning("Health check failed, skipping watchdog notification")
                         await asyncio.sleep(self.heartbeat_interval)
                         continue
+                else:
+                    logger.error("No health check function provided")
+                    healthy = False
                 
                 # Send watchdog notification
                 self.notifier.notify("WATCHDOG=1")

@@ -527,7 +527,7 @@ async def create_tasks():
     print("Starting heartbeat monitoring...")
     heartbeat_check.start()
 
-@Task.create(IntervalTrigger(seconds=5))
+@Task.create(IntervalTrigger(seconds=10))
 async def notification_sync():
     await notification_service.process_pending_notifications()
 

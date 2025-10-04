@@ -1,9 +1,7 @@
 # redis.py
 import redis
 from typing import Optional
-from utils.format import normalize_npc_name
 from datetime import datetime
-from db import User, Group, Guild, Player, NpcList, ItemList, PersonalBestEntry, Drop, UserConfiguration, session, ItemList, GroupConfiguration, models
 import os
 from dotenv import load_dotenv
 
@@ -96,10 +94,13 @@ redis_client = RedisClient()
 
 
 def calculate_rank_amongst_groups(target_group_id, player_ids, session_to_use=None):
+    # Import locally to avoid circular dependencies at import time
+    from db import Group, Player, session as _session
+
     if session_to_use:
         db_session = session_to_use
     else:
-        db_session = session
+        db_session = _session
     groups = db_session.query(Group).all()
     
 
@@ -145,8 +146,10 @@ def calculate_global_overall_rank(player_id):
     partition = datetime.now().year * 100 + datetime.now().month
     player_totals = {}
     
+    # Import locally to avoid circular dependencies at import time
+    from db import Player, session as _session
     # Query all player IDs
-    player_ids = session.query(Player.player_id).all()
+    player_ids = _session.query(Player.player_id).all()
     
     # Iterate through all players and get their total loot from Redis
     for player_tuple in player_ids:
@@ -161,6 +164,7 @@ def calculate_global_overall_rank(player_id):
             return rank, total_ranked
         
     return None, total_ranked
+
 
 def calculate_clan_overall_rank(player_id, clan_player_ids):
     """
@@ -190,6 +194,7 @@ def calculate_clan_overall_rank(player_id, clan_player_ids):
             return rank, total_ranked, group_total
     
     return 0, total_ranked, group_total
+
 
 def get_true_player_total(player_id):
     """
