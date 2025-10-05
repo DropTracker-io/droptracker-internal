@@ -12,3 +12,5 @@ lootboard/themes/*
 alembic.ini
 app_logs.json
 .cursor/*
+static/assets/img/clans/*
+static/assets/img/clans/2/lb/*.png

@@ -402,8 +402,12 @@ class UserCommands(Extension):
                     print(f"Could not create a new player:", e)
                     session.rollback()
                 finally:
-                    return await ctx.send(f"Your account ({player_name}), with ID `{player_id}` has " +
+                    if player_id is not None:
+
+                        return await ctx.send(f"Your account ({player_name}), with ID `{player_id}` has " +
                                          "been added to the database & associated with your Discord account.",ephemeral=True)
+                    else:
+                        return await ctx.send(f"An error occurred while attempting to register your account. Please try again, or [reach out in Discord](https://www.droptracker.io/discord)",ephemeral=True)
             else:
                 return await ctx.send(f"Your account was not found in the WiseOldMan database.\\n" +
                                      f"You could try to manually update your account on their website by [clicking here](https://www.wiseoldman.net/players/{rsn}), then try again, or wait a bit.")

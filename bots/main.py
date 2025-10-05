@@ -1,21 +1,3 @@
-"""
-DropTracker Discord Bot - Main Application Module
-
-This module serves as the main entry point for the DropTracker Discord bot application.
-It integrates Discord bot functionality with a web interface using Quart, manages
-database operations, and provides comprehensive OSRS drop tracking and clan management features.
-
-The application consists of:
-- Discord bot using interactions.py
-- Quart web application for API and frontend
-- Scheduled tasks for leaderboard updates and clan synchronization
-- Health monitoring and graceful shutdown handling
-- Redis caching and notification systems
-
-Author: DropTracker Team
-Version: 1.0
-"""
-
 import random
 import threading
 import aiohttp
@@ -30,28 +12,9 @@ import time
 import multiprocessing
 import signal
 import sys
-
-# Ensure env is loaded early so we can gate systemd watchdog in dev
-load_dotenv()
-
-# Provide a no-op watchdog in dev to avoid systemd usage
-class _DummyWatchdog:
-    def set_health_check(self, fn):
-        return None
-    async def __aenter__(self):
-        return self
-    async def __aexit__(self, exc_type, exc, tb):
-        return None
-    async def notify_ready(self):
-        return None
-
-if os.getenv("STATUS") == "dev":
-    SystemdWatchdog = _DummyWatchdog  # type: ignore
-else:
-    from monitor.sdnotifier import SystemdWatchdog
+from monitor.sdnotifier import SystemdWatchdog
 
 from sqlalchemy import text
-from db.models.base import get_fresh_xenforo_session
 from services.notification_service import NotificationService
 from services.bot_state import BotState
 #from services.lootboards import Lootboards
@@ -85,7 +48,7 @@ from lootboard.generator import generate_server_board, get_generated_board_path
 from utils.cloudflare_update import CloudflareIPUpdater
 from utils.msg_logger import HighThroughputLogger
 from utils.wiseoldman import fetch_group_members
-from web.front import create_frontend ## 'frontend' actually only handles serving images now
+from web.front import create_frontend
 from commands import UserCommands, ClanCommands
 #from tickets import Tickets
 from db.models import Group, GroupConfiguration, GroupPatreon, GroupPersonalBestMessage, Guild, PersonalBestEntry, PlayerPet, Session, User, WebhookPendingDeletion, session, NpcList, ItemList, Webhook, Player
@@ -101,6 +64,7 @@ from data.submissions import ca_processor, drop_processor, pb_processor, clog_pr
 from utils.format import get_sorted_doc_files, format_time_since_update, format_number, get_command_id, get_extension_from_content_type, convert_to_ms, get_true_boss_name, replace_placeholders
 from datetime import datetime, timedelta
 import logging
+from games.gielinor_race.routes import gielinor_race_bp
 
 bot_ready = Value('b', False)  # 'b' is for boolean
 logger = LoggerClient(token=os.getenv('LOGGER_TOKEN'))
@@ -127,15 +91,6 @@ load_dotenv()
 
 # Hypercorn configuration
 def create_hypercorn_config():
-    """
-    Create and configure Hypercorn server configuration.
-    
-    Sets up the ASGI server configuration for the Quart web application
-    with appropriate settings for production deployment behind NGINX.
-    
-    Returns:
-        hypercorn.Config: Configured Hypercorn server configuration
-    """
     config = hypercorn.Config()
     config.bind = ["127.0.0.1:8080"]  # Only bind to localhost since NGINX will proxy
     config.use_reloader = False
@@ -155,10 +110,10 @@ bot = interactions.Client(intents=Intents.DIRECT_MESSAGES | Intents.GUILD_INTEGR
 bot.send_not_ready_messages = True
 bot.send_command_tracebacks = False
 
-if os.getenv("STATE") == "dev" or os.getenv("STATUS") == "dev":
-    bot_token = os.getenv("DEV_TOKEN")
+if os.getenv("STATUS") == "dev" or os.getenv("STATE") == "dev":
+    bot_token = os.getenv('DEV_TOKEN')
 else:
-    bot_token = os.getenv("BOT_TOKEN")
+    bot_token = os.getenv('BOT_TOKEN')
 
 ## Quart server initialization ##
 app = Quart(__name__)
@@ -179,20 +134,10 @@ app.config['PROXY_FIX_X_PREFIX'] = 1
 notification_service = None
 watchdog = None
 shutdown_event = asyncio.Event()
-startup_initialized = False
 
 # Health check functions for systemd watchdog
 async def health_check():
-    """
-    Comprehensive health check for the application.
-    
-    Performs various checks to ensure all components of the application
-    are running properly, including the Discord bot, notification service,
-    and web application.
-    
-    Returns:
-        bool: True if all health checks pass, False otherwise
-    """
+    """Comprehensive health check for the application"""
     try:
         # Check if bot is ready and connected
         if not bot.is_ready:
@@ -213,31 +158,15 @@ async def health_check():
 
 # Signal handlers for graceful shutdown
 def signal_handler(signum, frame):
-    """
-    Handle shutdown signals for graceful application termination.
-    
-    Args:
-        signum (int): Signal number received
-        frame: Current stack frame
-    """
+    """Handle shutdown signals"""
     print(f"Received signal {signum}, initiating graceful shutdown...")
     shutdown_event.set()
 
 def setup_signal_handlers():
-    """
-    Setup signal handlers for graceful shutdown.
-    
-    Registers handlers for SIGTERM, SIGINT, and SIGHUP signals
-    to ensure the application can shut down gracefully when requested.
-    """
-    # Cross-platform signal setup
-    if hasattr(signal, "SIGTERM"):
-        signal.signal(signal.SIGTERM, signal_handler)
+    """Setup signal handlers for graceful shutdown"""
+    signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    if hasattr(signal, "SIGHUP"):
-        signal.signal(signal.SIGHUP, signal_handler)
-    if hasattr(signal, "SIGBREAK"):
-        signal.signal(signal.SIGBREAK, signal_handler)
+    signal.signal(signal.SIGHUP, signal_handler)
 
 @listen(Startup)
 async def on_startup(event: Startup):
@@ -246,27 +175,23 @@ async def on_startup(event: Startup):
     start_time = time.time()
     global total_guilds
     global notification_service
-    global startup_initialized
-    if not notification_service:
-        notification_service = NotificationService(bot, db)
+    notification_service = NotificationService(bot, db)
     print(f"Connected as {bot.user.display_name} with id {bot.user.id}")
     bot_ready.value = True
     bot.send_command_tracebacks = False
     app_logger = AppLogger()
     await bot.change_presence(status=interactions.Status.ONLINE,
                               activity=interactions.Activity(name=f" /help", type=interactions.ActivityType.WATCHING))
-    if not startup_initialized:
-        #bot.load_extension("services.update_dmer")
-        bot.load_extension("commands")
-        bot.load_extension("services.bot_state")
-        bot.load_extension("services.message_handler")
-        bot.load_extension("services.channel_names")
-        bot.load_extension("services.components")
-        print("Loaded services.")
-        print("Set bot to ready")
-        await asyncio.sleep(1)
-        await create_tasks()
-        startup_initialized = True
+    #bot.load_extension("services.update_dmer")
+    bot.load_extension("commands")
+    bot.load_extension("services.bot_state")
+    bot.load_extension("services.message_handler")
+    bot.load_extension("services.channel_names")
+    bot.load_extension("services.components")
+    print("Loaded services.")
+    print("Set bot to ready")
+    await asyncio.sleep(1)
+    await create_tasks()
 
 
 ## Quart server functions ##
@@ -532,7 +457,7 @@ async def create_tasks():
     print("Starting heartbeat monitoring...")
     heartbeat_check.start()
 
-@Task.create(IntervalTrigger(seconds=10))
+@Task.create(IntervalTrigger(seconds=5))
 async def notification_sync():
     await notification_service.process_pending_notifications()
 
@@ -545,13 +470,18 @@ async def heartbeat_check():
     global bot
     
     if not bot.is_ready:
-        app_logger.log(log_type="warning", data="Bot is not ready; waiting for run_bot to handle reconnect", app_name="main", description="heartbeat_check")
+        app_logger.log(log_type="warning", data="Bot is not ready, attempting to reconnect", app_name="main", description="heartbeat_check")
+        try:
+            await bot.astart(bot_token)
+        except Exception as e:
+            app_logger.log(log_type="error", data=f"Failed to reconnect bot: {e}", app_name="main", description="heartbeat_check")
 
 async def run_discord_bot():
     async with aiohttp.ClientSession() as session:
         await bot.astart(bot_token)
 
 front = create_frontend(bot)
+#admin_cp_bp = create_admin_cp(bot)
 app.register_blueprint(front)
 
 async def run_bot():
@@ -577,22 +507,69 @@ async def main():
             await watchdog.notify_ready()
             print("Systemd watchdog initialized and ready notification sent")
             
-            # Start bot and web server concurrently, and keep serving until shutdown
-            bot_task = asyncio.create_task(run_bot())
-            hypercorn_config = create_hypercorn_config()
-            quart_task = asyncio.create_task(hypercorn.asyncio.serve(app, hypercorn_config))
-
-            try:
-                await shutdown_event.wait()
-            finally:
-                print("Shutdown requested, cancelling tasks...")
-                for task in [bot_task, quart_task]:
-                    if not task.done():
-                        task.cancel()
-                        try:
-                            await task
-                        except asyncio.CancelledError:
-                            pass
+            while not shutdown_event.is_set():  # Check for shutdown signal
+                bot_task = asyncio.create_task(run_bot())
+                hypercorn_config = create_hypercorn_config()
+                quart_task = asyncio.create_task(hypercorn.asyncio.serve(app, hypercorn_config))
+                
+                try:
+                    # Wait for either tasks to complete or shutdown signal
+                    done, pending = await asyncio.wait(
+                        [bot_task, quart_task, asyncio.create_task(shutdown_event.wait())],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    # If shutdown was requested, cancel all tasks
+                    if shutdown_event.is_set():
+                        print("Shutdown requested, cancelling tasks...")
+                        for task in [bot_task, quart_task]:
+                            if not task.done():
+                                task.cancel()
+                                try:
+                                    await task
+                                except asyncio.CancelledError:
+                                    pass
+                        break
+                    
+                    # Check if any task failed
+                    for task in done:
+                        if task.exception():
+                            print(f"Task failed: {task.exception()}")
+                            # Cancel remaining tasks
+                            for remaining_task in [bot_task, quart_task]:
+                                if not remaining_task.done():
+                                    remaining_task.cancel()
+                                    try:
+                                        await remaining_task
+                                    except asyncio.CancelledError:
+                                        pass
+                            
+                            # Wait before attempting restart (unless shutdown requested)
+                            if not shutdown_event.is_set():
+                                await asyncio.sleep(5)
+                                print("Restarting tasks...")
+                                continue
+                            else:
+                                break
+                
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+                    # Properly clean up tasks
+                    for task in [bot_task, quart_task]:
+                        if not task.done():
+                            task.cancel()
+                            try:
+                                await task
+                            except asyncio.CancelledError:
+                                pass
+                    
+                    # Wait before attempting restart (unless shutdown requested)
+                    if not shutdown_event.is_set():
+                        await asyncio.sleep(5)
+                        print("Restarting tasks...")
+                        continue
+                    else:
+                        break
             
             print("Application shutting down gracefully...")
             
