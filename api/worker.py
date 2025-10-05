@@ -86,22 +86,36 @@ async def get_items():
 @worker_bp.route('/latest_welcome', methods=['GET'])
 async def get_latest_welcome_message():
     with get_db_session() as session:
-        welcome_message: GroupConfiguration = session.query(GroupConfiguration).filter(GroupConfiguration.group_id == 2,
-                                                                              GroupConfiguration.config_key == "welcome_message").first()
-        if welcome_message is not None:
-            return welcome_message.long_value
-        else:
-            return "Welcome to the DropTracker", 404
+        try:
+            welcome_message: GroupConfiguration = session.query(GroupConfiguration).filter(GroupConfiguration.group_id == 2,
+                                                                                GroupConfiguration.config_key == "welcome_message").first()
+            if welcome_message is not None:
+                if welcome_message.long_value is not None:
+                    return welcome_message.long_value
+                else:
+                    return "Welcome to the DropTracker", 200
+            else:
+                return "Welcome to the DropTracker", 200
+        except Exception as e:
+            return jsonify({"error": "Error getting latest welcome message: " + str(e)}), 500
+    return "No welcome message found", 200
+        
         
 @worker_bp.route('/latest_news', methods=['GET'])
 async def get_latest_news():
     with get_db_session() as session:
-        news_message: GroupConfiguration = session.query(GroupConfiguration).filter(GroupConfiguration.group_id == 2,
+        try:
+            news_message: GroupConfiguration = session.query(GroupConfiguration).filter(GroupConfiguration.group_id == 2,
                                                                               GroupConfiguration.config_key == "latest_news").first()
-        if news_message is not None:
-            return str(news_message.long_value)
-        else:
-            return jsonify({"message": "No news message found"}), 404
+            if news_message is not None:
+                if news_message.long_value is not None:
+                    return str(news_message.long_value)
+                else:
+                    return "No news message found", 200
+            else:
+                return "No news message found", 200
+        except Exception as e:
+            return jsonify({"error": "Error getting latest news message: " + str(e)}), 500
         
 
 @worker_bp.route("/api/item_by_search", methods=["GET"])

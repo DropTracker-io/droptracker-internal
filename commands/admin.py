@@ -128,7 +128,7 @@ class ClanCommands(Extension):
             try:
                 embed = Embed(title="New group created",
                             description=f"Your group has been created (ID: `{group.group_id}`)!")
-                embed.add_field(name=f"WOM group `{group.wom_id}` (`{total_members}` members) is now assigned to your Discord server `{group.guild_id}`",
+                embed.add_field(name=f"WOM group `{group.wom_id}` is now assigned to your Discord server `{group.guild_id}`",
                                 value=f"<a:loading:1180923500836421715> Please wait while we initialize some other things for you...",
                                 inline=False)
             except NameError as e:

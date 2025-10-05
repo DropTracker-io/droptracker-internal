@@ -23,9 +23,10 @@ client = wom.Client(
     user_agent="@joelhalen"
 )
 
-async def check_user_by_username(username: str):
+async def check_user_by_username(username: str) -> tuple[Player, str, int, int]:
     """ Check a user in the WiseOldMan database, returning their "player" object,
         their WOM ID, and their displayName.
+        Returns (player, player_name, player_wom_id, log_slots)
     """
     # TODO -- only grab necessary info and parse it before returning the full player obj?
     await limiter.wait()
@@ -37,7 +38,7 @@ async def check_user_by_username(username: str):
             if result.is_ok:
                 player = result.unwrap()
                 if player is None:
-                    return None, None, None
+                    return None, None, None, -1
                 log_slots = 0
                 snapshot_data = None
                 snapshot = getattr(player, "latest_snapshot", None)
@@ -76,7 +77,7 @@ async def check_user_by_username(username: str):
                 
                 if player is None:
                     print(f"Got empty player object after update for {username}")
-                    return None, None, None
+                    return None, None, None, -1
                 print("Got player object after update for", username + ":", player)
                 player_id = player.id
                 player_name = player.username

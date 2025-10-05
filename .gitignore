@@ -14,3 +14,5 @@ app_logs.json
 .cursor/*
 static/assets/img/clans/*
 static/assets/img/clans/2/lb/*.png
+data/logs/app_logs.json
+static/assets/img/clans/2/lb/04-10-2025.png

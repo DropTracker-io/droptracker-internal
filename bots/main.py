@@ -146,6 +146,9 @@ async def health_check():
         # Check if notification service is running
         if notification_service is None:
             return False
+        if hasattr(notification_service, "is_running"):
+            if not notification_service.is_running():
+                return False
         
         # Check if Quart app is running (basic check)
         if app is None:
@@ -176,6 +179,11 @@ async def on_startup(event: Startup):
     global total_guilds
     global notification_service
     notification_service = NotificationService(bot, db)
+    await notification_service.start()
+    # Ensure the service actually started
+    if hasattr(notification_service, "is_running") and not notification_service.is_running():
+        # Attempt one more time in case the loop wasn't ready
+        await notification_service.start()
     print(f"Connected as {bot.user.display_name} with id {bot.user.id}")
     bot_ready.value = True
     bot.send_command_tracebacks = False
@@ -446,7 +454,6 @@ async def lootboard_updates():
     
 
 async def create_tasks():    
-    notification_sync.start()
     print("Starting lootboards")
     await lootboard_updates()
     lootboard_updates.start()
@@ -457,9 +464,6 @@ async def create_tasks():
     print("Starting heartbeat monitoring...")
     heartbeat_check.start()
 
-@Task.create(IntervalTrigger(seconds=5))
-async def notification_sync():
-    await notification_service.process_pending_notifications()
 
 
 
@@ -475,6 +479,14 @@ async def heartbeat_check():
             await bot.astart(bot_token)
         except Exception as e:
             app_logger.log(log_type="error", data=f"Failed to reconnect bot: {e}", app_name="main", description="heartbeat_check")
+    # Ensure notification service loop is alive
+    global notification_service
+    if notification_service is not None and hasattr(notification_service, "is_running"):
+        if not notification_service.is_running():
+            try:
+                await notification_service.start()
+            except Exception as e:
+                app_logger.log(log_type="error", data=f"Failed to restart notification service: {e}", app_name="main", description="heartbeat_check")
 
 async def run_discord_bot():
     async with aiohttp.ClientSession() as session:
@@ -572,6 +584,12 @@ async def main():
                         break
             
             print("Application shutting down gracefully...")
+            # Stop notification service on shutdown
+            try:
+                if notification_service is not None:
+                    await notification_service.stop()
+            except Exception:
+                pass
             
     except KeyboardInterrupt:
         print("Received keyboard interrupt")

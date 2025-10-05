@@ -35,23 +35,56 @@ class NotificationService:
         self.notified_users = []
         self.running = False
         self._processing_lock = asyncio.Lock()
+        # Background task that runs the processing loop
+        self._task = None
     
-    @interactions.Task.create(interactions.IntervalTrigger(seconds=5))
+    #@interactions.Task.create(interactions.IntervalTrigger(seconds=5))
     async def start(self):
-        """Start the notification service"""
-        if self.running:
+        """Start the notification service.
+
+        Creates a long-lived background task bound to the current running loop
+        that periodically processes pending notifications. If the task already
+        exists and is running, this is a no-op.
+        """
+        # If the task is already running, do nothing
+        if self._task is not None and not self._task.done():
+            self.running = True
             return
-            
+
+        # If a previous task finished, drop the reference
+        self._task = None
         self.running = True
-        asyncio.create_task(self.process_notifications_loop())
+
+        loop = asyncio.get_running_loop()
+        self._task = loop.create_task(self.process_notifications_loop(), name="notification_service_loop")
     
     async def stop(self):
-        """Stop the notification service"""
+        """Stop the notification service.
+
+        Cancels and awaits the background task to ensure a clean shutdown.
+        """
         self.running = False
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._task = None
+
+    def is_running(self) -> bool:
+        """Return True if the background loop task is alive and running."""
+        return self.running and self._task is not None and not self._task.done()
     
     
     async def process_notifications_loop(self):
-        """Main loop to process notifications"""
+        """Main loop to process notifications.
+
+        This loop is resilient to transient errors and will continue running
+        until explicitly stopped via `stop()`. It handles task cancellation
+        gracefully to integrate with application shutdown.
+        """
         cleanup_counter = 0
         consecutive_errors = 0
         max_consecutive_errors = 5
@@ -70,7 +103,9 @@ class NotificationService:
                         await self.cleanup_tracking_dicts()
                         await self.cleanup_stuck_notifications()
                         cleanup_counter = 0
-                        
+            except asyncio.CancelledError:
+                # Graceful shutdown
+                break
             except Exception as e:
                 consecutive_errors += 1
                 app_logger.log(log_type="error", data=f"Error processing notifications (attempt {consecutive_errors}): {e}", app_name="notification_service", description="process_notifications_loop")
@@ -80,9 +115,9 @@ class NotificationService:
                     app_logger.log(log_type="warning", data=f"Too many consecutive errors ({consecutive_errors}), increasing sleep time", app_name="notification_service", description="process_notifications_loop")
                     await asyncio.sleep(30)  # Longer sleep on repeated errors
                     consecutive_errors = 0  # Reset after longer sleep
-            finally:
-                # Normal sleep time
-                await asyncio.sleep(5)
+            
+            # Normal sleep time between iterations
+            await asyncio.sleep(5)
     
     async def process_pending_notifications(self):
         """Process pending notifications with improved locking strategy"""

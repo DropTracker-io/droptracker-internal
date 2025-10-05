@@ -11,6 +11,7 @@ from utils.format import format_number
 from services.redis_updates import get_player_current_month_total
 from data.TOP_NPCS import TOP_NPCS
 from db import Player, NotifiedSubmission, NpcList, Group, GroupConfiguration, get_current_partition
+from utils.wiseoldman import check_user_by_username
 
 
 players_bp = Blueprint("players", __name__)
@@ -135,6 +136,13 @@ async def load_config():
     try:
         player = db_session.query(Player).filter(Player.player_name == player_name, Player.account_hash == acc_hash).first()
         if not player:
+            try:
+                player_wom_data = await check_user_by_username(player_name)
+                player = Player(player_name=player_name, account_hash=acc_hash, wom_id=player_wom_data[2], log_slots=player_wom_data[3])
+                db_session.add(player)
+                db_session.commit()
+            except Exception as e:
+                return jsonify({"error": "Error checking user by username: " + str(e)}), 500
             return jsonify({"error": "Player not found"}), 404
         player_gids = db_session.execute(text("SELECT group_id FROM user_group_association WHERE player_id = :player_id"), {"player_id": player.player_id}).all()
         group_configs = []
