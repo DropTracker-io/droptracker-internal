@@ -50,10 +50,10 @@
 DropTracker.io powers OSRS loot, achievements, and leaderboards across Discord communities. This repository contains:
 
 - A primary Discord bot that also hosts a local Quart web app.
-- A standalone API server for programmatic access and dashboards.
-- A webhook bot optimized for RuneLite-style ingestion and reaction workflows.
+- A standalone API server for processing incoming submissions directly sent to the server
+- A webhook bot optimized for RuneLite-style ingestion and reaction workflows; reading data from players with the API disabled on RuneLite
 - MySQL storage via SQLAlchemy, with Alembic migrations.
-- Optional Redis-backed caches and utilities for Cloudflare, GitHub, WOM, and more.
+- Redis-backed cached storage of leaderboards, managed by a background process and real-time updates as submissions are processed.
 
 It is important to note that this repository is very much a work-in-progress, and many pieces of code may be outdated or completely deprecated, but not yet removed.
 
@@ -66,12 +66,13 @@ It is important to note that this repository is very much a work-in-progress, an
 - Redis
 - discord-py-interactions
 - PyJWT / Quart-JWT-Extended
+- Lots of coffee :)
 
 
 ### Repository Layout
 
-- `main.py`: Main Discord bot and embedded Quart app (served via Hypercorn).
-- `new_api.py`: Standalone Quart API server.
+- `bots/main.py`: Main Discord bot and embedded Quart app (served via Hypercorn).
+- `api/app.py`: Standalone Quart API server.
 - `bots/webhook_bot.py`: Webhook-focused Discord bot.
 - `api/worker.py`: Quart blueprint(s) and task endpoints.
 - `db/models/`: SQLAlchemy models and engine/session setup (`db/models/base.py`).
@@ -80,6 +81,7 @@ It is important to note that this repository is very much a work-in-progress, an
 - `utils/`: Shared utilities (WOM client, embeds, logger, Redis client, etc.).
 - `lootboard/`: Lootboard generators and utilities.
 - `monitor/`: Linux-only service supervisor (GNU screen-based CLI).
+- `games/`: Event system infrastructure, with Bingo "mostly" coded (deprecated)
 
 
 ## Getting Started
